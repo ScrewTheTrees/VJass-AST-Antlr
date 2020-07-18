@@ -1,0 +1,882 @@
+library Projectile requires Vector, optional ProjectileArt
+//##########################################################################################################    
+//#
+//#     P R O J E C T I L E                                                                        
+//#                         by Berb
+//#
+//##########################################################################################################
+
+//**********************************************************************************************************
+//*
+//*     WarCraft III: Custom Projectiles Library
+//*     ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*     Author:     Berb / TheKid
+//*     Version:    2.2.0
+//*
+//*     Requirements:
+//*     ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*         • JassHelper 0.A.2.B
+//*         • Vector by Anitarf
+//*
+//*     To Know:
+//*     ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*         • Pitch variance requires the dummy.mdx model that is included in "xebasic".
+//*         • Projectile groups are limited by the number of projectiles that they can contain.
+//*
+//*     Description:
+//*     ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*         The purpose of this library is to provide users with an interface by which they can easily
+//*         manage their projectiles. It is recommended that the user read through the API to discover
+//*         which control features he/she has access to.
+//*
+//*     Recent Changes:
+//*     ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*         2.1.1   - Removed the "FLAG__onFinish" state flag which disallowed projectiles from being
+//*                   launched properly in succession. It isn't actually very useful, and it doesn't provide
+//*                   any bonus functionality - I'm not sure why I put it in there in the first place.
+//*
+//*                 - If necessary, projectiles can be launched in their "onFinish" method response as they
+//*                   are deactivated before that response is executed. By deactivating the "toDestroy"
+//*                   member users will more easily be able to make projectiles "bounce" from one target
+//*                   to another.
+//*
+//*         2.1.2   - Optimized the "enumNearby" method as corrected by Bribe.
+//*
+//*         2.1.3   - Fixed a very minor issue with projectiles being destroyed prematurely by adding a member
+//*                   "destroyed" to the projectile members.
+//*
+//*                     > Instead of checking "if (proj == 0) then" to detect if a projectile has been
+//*                       destroyed, the user can now do: "if (proj.destroyed) then". This simply removes
+//*                       the "double-free" message from a projectile being destroyed twice.
+//*
+//*                     > The value "destroyed" is defaulted to false, and set to true in the "onDestroy"
+//*                       method.
+//*
+//*                 - Added method operator to the "projectilegroup" struct to reference members of the
+//*                   group with array syntax, rather than using the array member "indexOf[]".
+//*
+//*                 - Changed the members "DATA__stack" and "DATA__size" to readonly so that users can
+//*                   perform iterations on the entire stack of projectiles.
+//*
+//*         2.2.0   - Removed the indexOf[] array member from the projectile-group struct. In substitution,
+//*                   the array syntax operator [] is available (since 2.1.3).
+//*
+//*                 - Removed one of the hashtable requirements for projectile group referencing. Instead,
+//*                   only one hashtable is required for this (and another for projectile groups).
+//*
+//*                 - Removed the limit on the amount of projectiles that can be stored in a projectile
+//*                   group by further utilizing the hashtable that was already used for the very quick
+//*                   "inGroup" method.
+//*
+//*
+//*
+//**********************************************************************************************************
+
+
+globals
+//**************************
+//* Configuration
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*     Includes default definitions of projectile settings in addition to other values that are used
+//*     within the system but rely on a value in order to function.
+//*
+//* Fly Height Modifier Ability
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    public      constant integer            ID__flyHeightModifier           = 'Amrf'          
+//*          
+//* Settings
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    public      constant real               COLLISION__default              = 70.00         // The maximum and default settings for projectile collision.
+    public      constant real               COLLISION__sizeMax              = 200.00
+//*
+//* Default Features Config
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    private     constant boolean            DEFAULT__targetFollow           = true          // These features enable certain elements of each projectile, giving the user
+    private     constant boolean            DEFAULT__unitCollision          = false         // the option to customize what properties the projectile displays - like whether
+    private     constant boolean            DEFAULT__destCollision          = false         // it can collide with units/destructables to whether or not it is a target                                                                                                            
+    private     constant boolean            DEFAULT__faceRotation           = true          // "seeking" or following target.
+    private     constant boolean            DEFAULT__facePitch              = true            
+    private     constant boolean            DEFAULT__toExpire               = true      
+    private     constant boolean            DEFAULT__toKill                 = true    
+    private     constant boolean            DEFAULT__toRemove               = false  
+//*
+//*
+    public      constant real               SETTING__timeout                = 0.03          // This identifies the amount of time (in seconds) that lapses between each
+//*                                                                                         // iteration that the projectiles are "updated".
+//*
+//*
+//**********************************************************************************************************
+endglobals
+
+
+
+
+interface projectileinterface
+//**************************
+//* Projectile Interface
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*     Includes the names for methods (and their parameters) that users can declare in child-structures to
+//*     acquire reference to a projectile on different occurances that prompt a response.
+//*
+//* Event Response - State
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    method  onStart             takes nothing returns nothing           defaults nothing
+    method  onFinish            takes nothing returns nothing           defaults nothing    // Projectile completes trajectory.
+    method  onGround            takes nothing returns nothing           defaults nothing    // Impact with terran.
+//*
+//* Event Response - Collision
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    method  onUnitCollision     takes unit u returns nothing            defaults nothing
+    method  onDestCollision     takes destructable d returns nothing    defaults nothing
+//*
+//* Filters
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    method  isValidTargetUnit   takes unit u returns boolean            defaults true
+    method  isValidTargetDest   takes destructable d returns boolean    defaults true
+//*
+//*
+//**********************************************************************************************************    
+endinterface
+
+
+
+
+globals
+//**************************
+//* Dynamic Storage
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*     In order to optimize the Projectiles efficiency, certain global variables are required to make
+//*     special calculations and operations; such as GetLocationZ().
+//*
+//* References
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    private     projectile          projRef
+    private     location            loc                     = Location(0, 0)
+    private     group               grp                     = CreateGroup()
+    private     rect                rct                    
+//*
+    private     hashtable           projGroupTable          = InitHashtable( )
+//*
+//* Misc
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    private     integer             totalProjectiles        = 0
+//*
+//*
+//**********************************************************************************************************
+endglobals
+
+
+
+
+//**************************
+//* Total Projectile Count
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*     The amount of projectiles that are currently in operation. The value that is returned is added to
+//*     and subtracted from whenever a projectile is created/destroyed.
+//*
+function GetTotalProjectiles takes nothing returns integer
+    return totalProjectiles
+   
+endfunction
+//*
+//*
+//**********************************************************************************************************    
+
+
+
+struct projectilegroup
+//**************************
+//* Projectile Group
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*     Enumeration is a big part of WarCraft III, and it would be hard to really utilize projectiles
+//*     properly without having some method of enumeration.
+//*
+//* API:
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*     @[]                     - Method operator for referencing members of the group with array syntax.
+//*     @size                   - The amount of projectiles that are currently stored in the group.
+//*
+//*     @add( )                 - Adds a specified projectile to the group if it hasn't been already.
+//*     @remove( )              - Removes a specified projectile from the group if it has been added.
+//*
+//*     @inGroup( )             - Returns true if the designated projectile is included in the group.
+//*
+//* Components
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    readonly        integer             size            = 0
+    private static  hashtable           table           = InitHashtable( )
+//*
+//* Operators
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    method operator [] takes integer index returns projectile
+        return LoadInteger(table, this+8092, index)
+    endmethod
+//*
+//* Utility Methods
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    method inGroup takes projectile p returns boolean               // This will return true if the
+        return HaveSavedInteger(thistype.table, this, p)            // specified projectile is included in
+                                                                    // "this" group.
+    endmethod
+//*
+//* Group Operators
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    method add takes projectile p returns boolean    
+        local integer indexOfLast
+        if not inGroup(p) then          
+            call SaveInteger(thistype.table, this, p, size)  
+            call SaveInteger(thistype.table, this+8092, size, p)  
+            set size = size + 1    
+   
+            set indexOfLast = 0
+            if HaveSavedInteger(projGroupTable, p, -1) then
+                set indexOfLast = LoadInteger(projGroupTable, p, -1)
+            endif
+            call SaveInteger(projGroupTable, p, indexOfLast, this)
+            call SaveInteger(projGroupTable, p+8092, this, indexOfLast)
+            call SaveInteger(projGroupTable, p, -1, indexOfLast + 1)
+           
+            return true                                          
+        endif                                                      
+        return false
+    endmethod
+    method remove takes projectile p returns boolean
+        local integer indexOfLast
+        local integer indexOfThis
+        if inGroup(p) then          
+            set size = size - 1
+            set indexOfThis = LoadInteger(table, this, p)
+            call SaveInteger(table, this+8092, indexOfThis, LoadInteger(table, this+8092, size))
+            call SaveInteger(table, this, LoadInteger(table, this+8092, indexOfThis), indexOfThis)
+            call RemoveSavedInteger(table, this+8092, size)
+            call RemoveSavedInteger(table, this, p)
+       
+            set indexOfLast = LoadInteger(projGroupTable, p, -1) - 1
+            set indexOfThis = LoadInteger(projGroupTable, p+8092, this)
+            call SaveInteger(projGroupTable, p, -1, indexOfLast)
+            call SaveInteger(projGroupTable, p, indexOfThis, LoadInteger(projGroupTable, p, indexOfLast))
+            call SaveInteger(projGroupTable, p+8092, LoadInteger(projGroupTable, p, indexOfThis), indexOfThis)
+           
+            if indexOfLast < 1 then
+                call FlushChildHashtable(projGroupTable, p)
+                call FlushChildHashtable(projGroupTable, p+8092)
+               
+            endif
+            return true
+        endif
+        return false
+    endmethod
+//*
+//* Destructor & Clear
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*     Both the .clear( ) and .destroy( ) methods will perform the exact same actions, however when
+//*     .destroy( ) is used it will recycle the group struct. If .clear( ) is used it will simply ensure
+//*     there are no projectiles included in the projectilegroup.
+//*
+    method clear takes nothing returns nothing            
+        local integer i = size - 1                        
+        loop                                                
+            exitwhen i < 0
+            call remove(LoadInteger(table, this+8092, i))
+            set i = i - 1
+        endloop
+    endmethod
+    method onDestroy takes nothing returns nothing        
+        local integer i = size - 1
+        loop
+            exitwhen i < 0
+            call remove(LoadInteger(table, this+8092, i))
+            set i = i - 1
+        endloop
+    endmethod
+//*
+//*
+//*********************************************************************************************************
+endstruct
+
+
+
+struct projectile extends projectileinterface
+//*******************************************
+//* Projectile
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*     The projectile struct controls all aspects of the projectile motion, from creating it with a unit
+//*     handle to launching it through the air and destroying it. It has an extensive API as control can
+//*     get a little complex in areas.
+//*
+//* API: members
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*     @toUnit                     - The unit handle that represents the projectile in-game.
+//*     @speed                      - The speed at which the projectile is moving in a 2D perspective.
+//*     @arc                        - The arc at which the projectile is moving.
+//*
+//*     @activeTargetFollow         - Enables/disables projectile homing.
+//*     @activePitch                - Enables/disables projectile pitch rotation (cosmetic).
+//*     @activeRotation             - Enables/disables projectile rotation (cosmetic).
+//*     @activeUnitCollision        - Enables/disables projectile-unit collision.
+//*     @activeDestCollision        - Enables/disables projectile-destructable collision.
+//*
+//*     @destroyed                  - Value of 'true' if the projectile has been destroyed.
+//*     @toDestroy                  - Allows the projectile struct to be destroyed once it finishes.
+//*     @toRemove (optimal)         - Allows "toUnit" to be removed upon projectile destruction.
+//*     @toKill                     - Allows "toUnit" to be killed upon projectile destruction.
+//*
+//*     @x                          - "x" coordinate of the projectile object.
+//*     @y                          - "y" coordinate of the projectile object.
+//*     @z                          - "z" coordinate of the projectile object.
+//*     @collision                  - The collision-size of the projectile object.
+//*     @timescale                  - The execution time-scale of the projectile. Setting this to 0 will
+//*                                   freeze the projectile in position until it is "unpaused".
+//*
+//*     @source                     - The source unit of the projectile being launched.
+//*     @target                     - The target unit of the projectile being launched.
+//*     @targetX                    - "x" coordinate of the projectile target.
+//*     @targetY                    - "y" coordinate of the projectile target.
+//*     @targetZ                    - "z" coordinate of the projectile target.
+//*     @targetZOffset              - "z" coordinate offset of the projectile target.
+//*
+//* API: instance methods
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*     @setTargetPos               - Updates a projectile's target with 3 coordinate input parameters.
+//*
+//*     @launch                     - Launches a projectile from one point to another with given input.
+//*                                 @start      - The initial position vector.
+//*                                 @finish     - The final position vector.
+//*                                 @speed      - The velocity of the projectile in a 2D perspective.
+//*                                 @arc        - The arc that the projectile will be launched at.
+//*
+//*     @destroy                    - Destroys a projectile, cleaning all of its members and deallocating
+//*                                 it from the projectile engine in addition to removing the projectile
+//*                                 from any "projectilegroup" it was included in.
+//*
+//* API: static methods
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯    
+//*     @create                     - Creates a projectile object from a unit handle.
+//*
+//*     @enumNearby                 - Gathers nearby projectiles in a specified "projectilegroup".
+//*
+//*
+//* ########################################################################################################
+//*
+    readonly        unit            toUnit                      = null
+    readonly        real            speed                                                   // In order to launch a projectile, a "speed" and "arc" input is necessary. These
+    readonly        real            arc                                                     // values are stored in readonly-scope variables so that they can be referenced
+//*                                                                                         // externally.  
+//*
+    private         unit            PROP__target                = null                      // Both .priv_target and .priv_source can be referenced publicly by using the
+    private         unit            PROP__source                = null                      // method operators without the "priv_" prefix.
+    private         real            PROP__timescale             = 1.00
+    private         real            PROP__collision             = COLLISION__default
+    private         real            PROP__targetHeight          = 0
+//*
+//*
+    public          boolean         activeTargetFollow          = DEFAULT__targetFollow     // These settings are all defaulted to the configuration constants that are
+    public          boolean         activePitch                 = DEFAULT__facePitch        // declared above when the projectile is created. If the user wants to customize
+    public          boolean         activeRotation              = DEFAULT__faceRotation     // these settings beyond their defaults (or change them mid-flight) then they can
+    public          boolean         activeUnitCollision         = DEFAULT__unitCollision    // be referenced publicly and flagged on/off (true/false).
+    public          boolean         activeDestCollision         = DEFAULT__destCollision
+//*
+//*
+    public          boolean         destroyed                   = false
+    public          boolean         toDestroy                   = DEFAULT__toExpire         // These flags are specific to the end-phase of the projectile flight. Flags that
+    public          boolean         toKill                      = DEFAULT__toKill           // control whether the unit handle is killed/removed upon projectile destruction,
+    public          boolean         toRemove                    = DEFAULT__toRemove         // and whether or not a projectile is destroyed upon its "finish" event.
+//*
+//*
+    private         boolean         FLAG__onGround              = true                    
+    private         boolean         FLAG__active                = false  
+    private         boolean         FLAG__targetFollow          = false
+    private         boolean         FLAG__followUnit            = false
+    private         boolean         FLAG__isPaused              = false
+//*
+//*
+    private         vector          VECTOR__position                                // Each projectile allocates 5 vectors that control its motion. These vectors
+    private         vector          VECTOR__velocity                                // are mainly initiated to 0-vectors except for the "position vector", which
+    private         vector          VECTOR__acceleration                            // immediately occupies with the projectile's in-game coordinates.
+    private         vector          VECTOR__target
+    private         vector          VECTOR__start                                   // The starting-position is necessary to reference the "total" distance that
+//*                                                                                 // the projectile has traveled from where it began (cosmetic calculations).
+//*
+    private         integer         DATA__index                                    
+    readonly static thistype array  DATA__stack                                    
+    readonly static integer         DATA__size                  = 0
+    private static  timer           DATA__loop                  = CreateTimer()
+    private static  constant real   DATA__loopRef               = SETTING__timeout
+    private         real            DATA__timeLeft    
+//*
+//*  
+    private static  boolexpr        FUNC__enumUnits             = null
+    private static  boolexpr        FUNC__enumDests             = null
+//*
+//*
+//*
+//* ########################################################################################################
+//* - MODULE IMPLEMENTATION -
+    implement optional              ProjectileArt
+//*
+//* ########################################################################################################
+//*
+//* Position Interface
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    method operator x takes nothing returns real
+        return VECTOR__position.x
+    endmethod
+    method operator y takes nothing returns real
+        return VECTOR__position.y
+    endmethod
+    method operator z takes nothing returns real
+        return VECTOR__position.z
+    endmethod  
+//*
+//*
+//* Timescale Interface
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    method operator timescale takes nothing returns real
+        if FLAG__isPaused then
+            return 0.00
+        endif
+        return PROP__timescale
+    endmethod
+    method operator timescale= takes real r returns nothing    
+        if (r == 0) then                                      
+            set FLAG__isPaused = true                          
+        else
+            set FLAG__isPaused = false
+            set PROP__timescale = r
+        endif
+    endmethod
+//*
+//*
+//* Collision Interface
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    method operator collision takes nothing returns real
+        return PROP__collision
+    endmethod
+    method operator collision= takes real r returns nothing
+        if r > COLLISION__sizeMax then
+            set r = COLLISION__sizeMax
+        elseif r < 0 then
+            set r = 0
+        endif
+        set PROP__collision = r
+    endmethod
+//*
+//*
+//* Source Interface
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    method operator source takes nothing returns unit
+        return PROP__source
+    endmethod
+    method operator source= takes unit who returns nothing
+        set PROP__source = who
+    endmethod
+//*
+//*
+//* Target Interface
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//* ========================================================================================================
+    method operator target takes nothing returns unit           //* The target object (unit-only) can be
+        return PROP__target                                     //* referenced at any time through the
+                                                                //* projectile.
+    endmethod
+    method operator target= takes unit who returns nothing      //* The target can also be changed at any
+        if GetUnitTypeId(who) != 0 then                         //* time; setting the target to "null" or
+            set PROP__target = who                              //* even a removed unit will reset the
+            set FLAG__followUnit = true                         //* effects of modifying the target.
+        else
+            set PROP__target = null                             //* If a target is selected then the system
+            set FLAG__followUnit = false                        //* will automatically follow the unit's
+        endif                                                   //* position as the target vector.
+    endmethod
+//*
+//* ========================================================================================================
+    method operator targetX takes nothing returns real          
+        return VECTOR__target.x
+    endmethod
+    method operator targetY takes nothing returns real
+        return VECTOR__target.y
+    endmethod
+    method operator targetZ takes nothing returns real          
+        return VECTOR__target.z                                
+    endmethod    
+//*
+//* ========================================================================================================
+    method operator targetZOffset takes nothing returns real    
+        return PROP__targetHeight
+    endmethod
+    method operator targetZOffset= takes real r returns nothing
+        if r < 0 then                                          
+            set r = 0                                        
+        endif                    
+        set PROP__targetHeight = r
+    endmethod
+//*
+//* ========================================================================================================
+    method setTargetPos takes real x1, real y1, real z1 returns boolean  
+        local real xA
+        local real yA  
+        local vector v = VECTOR__velocity
+        if (x1 != VECTOR__target.x) or (y1 != VECTOR__target.y) or (z1 != VECTOR__target.z) then
+            set VECTOR__target.x    = x1
+            set VECTOR__target.y    = y1
+            set VECTOR__target.z    = z1 + PROP__targetHeight
+            set xA                  = VECTOR__position.x
+            set yA                  = VECTOR__position.y
+           
+            set xA                  = (x1-xA)*(x1-xA) + (y1-yA)*(y1-yA)
+            set yA                  = (v.x*v.x + v.y*v.y)/(thistype.DATA__loopRef*thistype.DATA__loopRef)
+            set DATA__timeLeft      = SquareRoot(xA/yA)
+           
+            set FLAG__targetFollow = true       // The "targetFollow" flag will be toggled to notify the
+            return true                         // engine that the target has been changed from its
+                                                // original position.
+        endif
+        return false
+    endmethod  
+//*
+//*
+//* Destructor
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    method onDestroy takes nothing returns nothing
+        local integer i    
+        if not (destroyed) then
+            set thistype.DATA__size = thistype.DATA__size - 1
+            set thistype.DATA__stack[DATA__index] = thistype.DATA__stack[thistype.DATA__size]
+            set thistype.DATA__stack[DATA__index].DATA__index = DATA__index
+            if (thistype.DATA__size == 0) then
+                call PauseTimer(thistype.DATA__loop)
+               
+            endif
+            set totalProjectiles = totalProjectiles - 1        
+           
+            if LIBRARY_ProjectileArt then       // If the ProjectileArt module was implemented, this will execute
+                call killModel( )               // a command to remove the model art.
+            endif
+            if toRemove then                    // The projectile unit handle can either be removed or killed,
+                call RemoveUnit(toUnit)         // with removal in priority if they are both flagged.
+            elseif toKill then
+                call KillUnit(toUnit)
+            endif
+           
+            call VECTOR__position.destroy( )
+            call VECTOR__velocity.destroy( )
+            call VECTOR__acceleration.destroy( )
+            call VECTOR__target.destroy( )
+            call VECTOR__start.destroy( )
+           
+            if HaveSavedInteger(projGroupTable, this, -1) then
+                set i = LoadInteger(projGroupTable, this, -1) - 1
+                loop
+                    exitwhen i < 0
+                    call projectilegroup(LoadInteger(projGroupTable, this, i)).remove(this)
+                    set i = i - 1
+                endloop
+                call FlushChildHashtable(projGroupTable, this)
+                call FlushChildHashtable(projGroupTable, this+8092)
+            endif
+            set destroyed = true
+        endif
+    endmethod
+//*
+//*
+//* Projectile Enumeration
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    static method enumNearby takes projectilegroup g, real x, real y, real z, real radius returns nothing
+        local integer i=0
+        local real x2
+        local real y2
+        local real z2
+        local real r2 = radius*radius
+        local thistype p
+        local vector v
+        loop
+            exitwhen i == DATA__size
+            set p  = DATA__stack[i]
+            set v  = p.VECTOR__position
+            set x2 = v.x
+            set y2 = v.y
+            set z2 = v.z
+            if ((x2-x)*(x2-x)+(y2-y)*(y2-y)+(z2-z)*(z2-z)) <= (r2) then
+                call g.add(DATA__stack[i])
+            endif
+            set i=i+1
+        endloop
+    endmethod
+//*
+//*
+//* Launch Projectile
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    method launch takes vector start, vector finish, real speed, real arc returns boolean
+        local real d
+        local real a
+        local boolean instant = false
+        if (start != 0) and (finish != 0) and not (FLAG__active) then
+            set VECTOR__position.x      = start.x      
+            set VECTOR__position.y      = start.y      
+            set VECTOR__position.z      = start.z
+            set VECTOR__target.x        = finish.x
+            set VECTOR__target.y        = finish.y
+            set VECTOR__target.z        = finish.z + PROP__targetHeight
+            set VECTOR__start.x         = start.x
+            set VECTOR__start.y         = start.y
+            set VECTOR__start.z         = start.z
+            set this.speed              = speed
+            set this.arc                = arc
+           
+            set d = SquareRoot((finish.x-start.x)*(finish.x-start.x) + (finish.y-start.y)*(finish.y-start.y))
+            set a = Atan2(finish.y-start.y, finish.x-start.x)
+           
+            if (d == 0) or (speed == 0) then
+                set VECTOR__position.x      = VECTOR__target.x      // If the projectile speed is 0 or the distance to the target
+                set VECTOR__position.y      = VECTOR__target.y      // is 0 then the projectile will be considered "instant", and
+                set VECTOR__position.z      = VECTOR__target.z      // launch to its destination immediately.
+                set DATA__timeLeft          = 0.00
+                set instant                 = true
+            else
+                set DATA__timeLeft          = d/speed
+                set VECTOR__acceleration.z  = (-8*arc*speed*speed/d)
+                set VECTOR__velocity.x      = speed*Cos(a)  *thistype.DATA__loopRef
+                set VECTOR__velocity.y      = speed*Sin(a)  *thistype.DATA__loopRef
+                set VECTOR__velocity.z      = (-VECTOR__acceleration.z * (d/speed)/2 + (VECTOR__target.z-start.z)/(d/speed)) /*
+                                                        */  *thistype.DATA__loopRef
+                set VECTOR__acceleration.z  = VECTOR__acceleration.z *thistype.DATA__loopRef*thistype.DATA__loopRef
+                   
+            endif
+           
+            call SetUnitX(toUnit, VECTOR__position.x)
+            call SetUnitY(toUnit, VECTOR__position.y)
+            call MoveLocation(loc, VECTOR__position.x, VECTOR__position.y)
+            call SetUnitFlyHeight(toUnit, VECTOR__position.z-GetLocationZ(loc), 0)
+           
+            call onStart( )
+            set FLAG__active = true
+            if instant then
+                set FLAG__active = false
+                call onFinish( )
+                if (toDestroy and not destroyed) then
+                    call destroy( )
+                endif
+            endif
+            return true
+        endif
+        return false    
+    endmethod
+//*
+//* Filter Enumeration Methods
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*     In order to efficiently cycle through nearby units and destructables it is necessary to use a
+//*     filterfunc callback which is automatically executed by the enumeration natives. These two filters
+//*     have global "boolexpr" references for efficient reference without having to use the Filter() native.
+//*
+    private static method doLoopDestFilter takes nothing returns boolean
+        local destructable d = GetFilterDestructable()
+        local real x         = GetDestructableX(d)
+        local real y         = GetDestructableY(d)
+        local real xB        = projRef.VECTOR__position.x
+        local real yB        = projRef.VECTOR__position.y
+        if ((xB-x)*(xB-x) + (yB-y)*(yB-y)) <= projRef.PROP__collision*projRef.PROP__collision then
+            if projRef.isValidTargetDest(d) then
+                call projRef.onDestCollision(d)
+            endif
+        endif               // Destructibles are picked if their x/y coordinates fall within a
+        set d = null        // Circular area around the projectile.
+        return false        
+    endmethod
+    private static method doLoopEnum takes nothing returns boolean          
+        local unit filt = GetFilterUnit()
+        local real xA   = GetUnitX(filt)
+        local real yA   = GetUnitY(filt)
+        local real xB   = projRef.VECTOR__position.x
+        local real yB   = projRef.VECTOR__position.y
+        if (((xA-xB)*(xA-xB) + (yA-yB)*(yA-yB)) <= projRef.PROP__collision*projRef.PROP__collision) then
+            if (projRef.isValidTargetUnit(filt)) then
+                call projRef.onUnitCollision(filt)
+            endif
+        endif
+        set filt = null
+        return false
+    endmethod
+//*
+//* Control Loop Iterator
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+//*     The loop will run through each member in the stack of projectiles and use it's acceleration and
+//*     velocity to calculate its motion path. This control loop will detect when the projectile collides
+//*     with units, destructables, or even the terrain; in addition to throwing a few interface methods
+//*     that allow the user to customize the actions to his/her preference.
+//*
+    private static method doLoop takes nothing returns nothing
+        local integer i = DATA__size - 1
+        local thistype dat
+        local vector vA
+        local vector vB
+        local vector vC
+        local real x
+        local real y
+        local real z
+        local real x2
+        local real y2
+        local real z2
+        local real e
+        local unit u
+        loop
+            exitwhen (i < 0)
+            set dat = DATA__stack[i]
+            if (dat != 0) then
+                if dat.FLAG__active then
+                    set e       = dat.timescale
+                    set vA      = dat.VECTOR__velocity
+                    set vB      = dat.VECTOR__acceleration
+                    set vA.x    = vA.x + vB.x *e
+                    set vA.y    = vA.y + vB.y *e
+                    set vA.z    = vA.z + vB.z *e
+                    set vB      = dat.VECTOR__position
+                    set vB.x    = vB.x + vA.x *e
+                    set vB.y    = vB.y + vA.y *e
+                    set vB.z    = vB.z + vA.z *e
+                else
+                    set vA      = dat.VECTOR__velocity
+                    set vB      = dat.VECTOR__position
+                endif
+               
+                set u = dat.toUnit
+                set x = vB.x
+                set y = vB.y
+                set z = vB.z
+                call SetUnitX(u, x)
+                call SetUnitY(u, y)
+                call MoveLocation(loc, x, y)
+                call SetUnitFlyHeight(u, z-GetLocationZ(loc), 0)
+               
+                set x2 = vA.x
+                set y2 = vA.y
+                set z2 = vA.z
+                if (dat.FLAG__active) and (x2 != 0 or y2 != 0 or z2 != 0) then
+                    if dat.activePitch then
+                        call SetUnitAnimationByIndex(u, R2I(bj_RADTODEG*Atan2(z2, dat.speed*DATA__loopRef)+0.5)+90)
+                        // This requires the dummy.mdx file that is included in xepreload. I should really make
+                        // xepreload a requirement (perhaps optional requirement) of this system.
+                    endif
+                    if dat.activeRotation then
+                        call SetUnitFacingTimed(u, Atan2(y2, x2)*bj_RADTODEG, 0)
+                    endif
+                endif
+               
+                if dat != 0 then
+                    if (z <= GetLocationZ(loc)) then                  
+                        if not (dat.FLAG__onGround) then            // The ".onGround( )" method callback will only be executed
+                            set dat.FLAG__onGround = true           // once upon hitting the ground, and not repeatedly if the
+                            call dat.onGround( )                    // projectile remains under the terrain level.
+                        endif                              
+                    else
+                        if (dat.FLAG__onGround) then
+                            set dat.FLAG__onGround = false
+                        endif
+                    endif
+                endif
+               
+                if (dat.activeUnitCollision) and dat != 0 then // Unit Collision
+                    set projRef = dat
+                    call GroupEnumUnitsInRange(grp, x, y, dat.PROP__collision, FUNC__enumUnits)
+                endif
+                if (dat.activeDestCollision) and dat != 0 then // Destructable Collision
+                    set projRef = dat
+                    call SetRect(rct, 0, 0, dat.PROP__collision, dat.PROP__collision)
+                    call MoveRectTo(rct, x, y)
+                    call EnumDestructablesInRect(rct, FUNC__enumDests, null)
+                endif
+               
+                if (dat != 0) and (dat.FLAG__active) and (dat.activeTargetFollow) then
+                    if (dat.FLAG__followUnit) and GetUnitTypeId(dat.target) != 0 then
+                        set x = GetUnitX(dat.target)
+                        set y = GetUnitY(dat.target)
+                        call MoveLocation(loc, x, y)
+                        set z = GetLocationZ(loc)+GetUnitFlyHeight(dat.target)
+                       
+                        call dat.setTargetPos(x, y, z)
+                    endif
+                    if (dat.FLAG__targetFollow) then
+                        set vC           = dat.VECTOR__target
+                        set x            = Atan2(vC.y-vB.y, vC.x-vB.x)                                      // Direction To Target (radians)
+                        set y            = SquareRoot((vC.x-vB.x)*(vC.x-vB.x) + (vC.y-vB.y)*(vC.y-vB.y))    // Distance To Target
+                        set z2           = vC.z-vB.z                                                        // Height Difference
+                       
+                        set vA.x         = dat.speed * Cos(x) * DATA__loopRef
+                        set vA.y         = dat.speed * Sin(x) * DATA__loopRef
+                        set vB           = dat.VECTOR__start
+                        set x            = SquareRoot((vB.x-vC.x)*(vB.x-vC.x) + (vB.y-vC.y)*(vB.y-vC.y))    // Total Distance
+
+                        set dat.VECTOR__acceleration.z  = -8*dat.arc*dat.speed*dat.speed/x                                                  
+                        set vA.z                        = -dat.VECTOR__acceleration.z * y/(dat.speed*2) + dat.speed*z2/y
+                       
+                        set dat.VECTOR__acceleration.z  = dat.VECTOR__acceleration.z   *DATA__loopRef*DATA__loopRef
+                        set vA.z                        = vA.z                         *DATA__loopRef
+                    endif
+                endif
+                   
+                if dat.FLAG__active then
+                    if not dat.FLAG__isPaused then
+                        set dat.DATA__timeLeft = dat.DATA__timeLeft - (DATA__loopRef*dat.timescale)
+                    endif
+                    if dat.DATA__timeLeft <= 0.00  then
+                        set dat.FLAG__active = false
+                        call dat.onFinish( )
+                        if (dat.toDestroy and not dat.destroyed) then
+                            call dat.destroy( )
+                        endif
+                    endif
+                endif
+            endif
+            set i = i - 1
+        endloop
+        set u = null
+    endmethod
+//*
+//*
+//* Constructor
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    static method create takes unit u returns thistype
+        local thistype dat  = thistype.allocate()
+        local real x        = GetUnitX(u)
+        local real y        = GetUnitY(u)
+           
+        call UnitAddAbility(u, ID__flyHeightModifier)
+        call UnitRemoveAbility(u, ID__flyHeightModifier)
+        if DATA__size == 0 then
+            call TimerStart(DATA__loop, DATA__loopRef, true, function thistype.doLoop)
+           
+        endif
+        call MoveLocation(loc, x, y)
+        set totalProjectiles = totalProjectiles + 1
+       
+        set dat.toUnit                  = u
+        set dat.DATA__index             = DATA__size
+        set dat.VECTOR__position        = vector.create(x, y, GetLocationZ(loc)+GetUnitFlyHeight(u))
+        set dat.VECTOR__target          = vector.create(0, 0, 0)
+        set dat.VECTOR__velocity        = vector.create(0, 0, 0)
+        set dat.VECTOR__acceleration    = vector.create(0, 0, 0)
+        set dat.VECTOR__start           = vector.create(0, 0, 0)
+        set DATA__stack[DATA__size]     = dat
+        set DATA__size                  = DATA__size + 1
+           
+        return dat
+    endmethod
+//*
+//*
+//* Setup & Initialization
+//* ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+    private static method onInit takes nothing returns nothing
+        set rct = Rect(0, 0, COLLISION__sizeMax, COLLISION__sizeMax)
+       
+        set FUNC__enumUnits = Filter(function thistype.doLoopEnum)
+        set FUNC__enumDests = Filter(function thistype.doLoopDestFilter)
+       
+    endmethod
+//*
+//*
+//*********************************************************************************************************
+endstruct
+
+
+
+
+endlibrary

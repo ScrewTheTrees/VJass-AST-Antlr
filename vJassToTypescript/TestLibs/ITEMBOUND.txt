@@ -1,0 +1,67 @@
+scope ITEMBOUND initializer main /* v1.0.0.1
+   ************************************************************************************
+   *
+   *    This script is used to set the ownership in an item.
+   *
+   ************************************************************************************/
+   
+      static if LIBRARY_RegisterPlayerUnitEvent then
+         private function OccurA takes nothing returns nothing
+      else
+         private function OccurB takes nothing returns boolean
+      endif
+   
+         local unit    UNIT      = GetTriggerUnit()
+         local item    ITEM      = GetManipulatedItem()
+         local integer ITEM_ID   = GetItemUserData(ITEM)
+   
+         local player  PICKER    = GetOwningPlayer(UNIT)
+         local integer PLAYER_ID = GetPlayerId(PICKER)
+         local player  OWNER
+         local string  NAME
+   
+         if ITEM_ID == 0 then
+            // Set the ownership id.
+            call SetItemUserData(ITEM, PLAYER_ID + 1)
+         else
+            // Check if the ownership id and player id are same.
+            if ITEM_ID - 1 != PLAYER_ID then
+               set OWNER = Player(ITEM_ID - 1)
+               set NAME  = GetPlayerName(OWNER)
+   
+               // Display the error message.
+               static if LIBRARY_SimError then
+                  call SimError(PICKER, "This item is owned by " + NAME + ".")
+               else
+                  call DisplayTimedTextToPlayer(PICKER, 0, 0, 2, "This item is owned by " + NAME + ".")
+               endif
+   
+               // Drop a picked item on the ground.
+               call UnitRemoveItem(UNIT, ITEM)
+   
+               set OWNER = null
+               set NAME  = null
+            endif
+         endif
+   
+         // Remove memory leaks.
+         set UNIT   = null
+         set ITEM   = null
+         set PICKER = null
+   
+         static if not LIBRARY_RegisterPlayerUnitEvent then
+            return false
+         endif
+      endfunction
+   
+      private function main takes nothing returns nothing
+         static if LIBRARY_RegisterPlayerUnitEvent then
+            call RegisterAnyPlayerUnitEvent(EVENT_PLAYER_UNIT_PICKUP_ITEM, function OccurA)
+         else
+            local trigger trg = CreateTrigger()
+            call TriggerRegisterAnyUnitEventBJ(trg, EVENT_PLAYER_UNIT_PICKUP_ITEM)
+            call TriggerAddCondition(trg, Condition(function OccurB))
+            set trg = null
+         endif
+      endfunction
+   endscope
